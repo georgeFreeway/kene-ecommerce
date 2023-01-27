@@ -4,7 +4,7 @@ import * as argon from 'argon2';
 import log from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 
-export const privateFields = ["password", "__v", "verificationCode", "verified", "passwordResetCode"];
+export const privateFields = ["password", "__v", "verificationCode", "verified"];
 
 @pre<User>('save', async function(){
     if(!this.isModified('password')){
@@ -42,9 +42,6 @@ export class User {
 
     @prop({ required: true, default: () => uuidv4() })
     verificationCode: string
-
-    @prop()
-    passwordResetCode: string | null
 
     @prop({ default: false })
     verified: boolean

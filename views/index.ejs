@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <title>RESET PASSWORD</title>
+</head>
+<body>
+    <div className="p-5 md:text-center">
+        <h1><%= email %></h1>
+        <form method="POST" id="form" action="">
+            <div class="mb-1">
+                <label class="font-mono block text-sm mb-3">PASSWORD</label>
+                <input 
+                    type='password' 
+                    name="password"
+                    class="border-2 border-black outline-none w-full md:w-96 p-2"
+                    id="input1"
+                />
+            </div>
+
+            <div class="mb-1">
+                <label class="font-mono block text-sm mb-3">CONFIRM PASSWORD</label>
+                <input 
+                    type='password' 
+                    name="confirmPassword"
+                    class="border-2 border-black outline-none w-full md:w-96 p-2"
+                    id="input2"
+                />
+            </div>
+
+            <button 
+                class="px-2 py-2 bg-black text-xs text-white w-full md:w-96 mt-3"
+                >SUBMIT
+            </button>
+        </form>
+    </div>
+</body>
+</html>

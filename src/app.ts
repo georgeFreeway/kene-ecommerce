@@ -9,15 +9,21 @@ import deserializeUser from './middlewares/deserializeUser';
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+
+//view engine
+app.set("view engine", 'ejs');
 
 //deserialize (decode&verify JWT) user on every request
 app.use(deserializeUser);
 
-const port = config.get<number>('port');
-app.listen(port, async () => {
-    logger.info(`server sope otilo, e don go on port: ${port} 🚀`);
-    connectDb();
-});
+connectDb()
+.then(() => {
+    const port = config.get<number>('port');
+    app.listen(port, () => {
+        logger.info(`server sope otilo, e don go on port: ${port} 🚀`);
+    });
+})
 
 app.use('/api/sole-luxury', router);
 

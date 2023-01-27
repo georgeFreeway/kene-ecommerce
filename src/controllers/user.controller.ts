@@ -1,14 +1,14 @@
 import { Request, Response} from "express";
-import { RegisterUserInput, VerifyUserInput, ForgotPasswordInput, ResetPasswordInput } from "../schema/user.schema";
+import { RegisterUserInput, VerifyUserInput, ForgotPasswordInput, ResetPasswordInput, ResetPasswordProper } from "../schema/user.schema";
 import { registerUser, findUserById, findUserByEmail } from "../service/user.service";
 import log from "../utils/logger";
-import { v4 as uuidv4 } from 'uuid';
 import sendgrid from '@sendgrid/mail';
 import { createSessionInput } from "../schema/auth.schema";
 import { signAccessToken, signRefreshToken, findSessionById } from "../service/auth.service";
 import { get } from "lodash";
 import { signJwt, verifyJwt } from "../utils/jwt";
-
+import UserModel from "../models/user.model";
+import * as argon from 'argon2';
 
 /**
  * register a user
@@ -22,20 +22,6 @@ export async function registerUserController(req: Request<{}, {}, RegisterUserIn
     try{
         const user = await registerUser(body);
         //send mail
-        sendgrid.setApiKey('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');
-        const msg = {
-            to: user.email,
-            from: 'freewayvelli@gmail.com',
-            subject: 'WELCOME TO SOLE LUXURY',
-            text: 'Adding luxury to your feet',
-            html: `<strong>Your Verification Code is ${user.verificationCode} </strong>`,
-        };
-
-        sendgrid.send(msg).then((response) => {
-            log.info(response);
-        }).catch((error) => {
-            log.error(error);
-        });
         return res.status(200).json(user);
     }catch(error: any){
         if(error.code === 11000){
@@ -51,12 +37,11 @@ export async function registerUserController(req: Request<{}, {}, RegisterUserIn
  * @param res 
  * @returns void
  */
-export async function verifyUserController(req: Request<VerifyUserInput, {}, {}>, res: Response){
-    const id = req.params.id;
-    const verificationCode = req.params.verificationCode;
+export async function verifyUserController(req: Request<VerifyUserInput['params'], {}, VerifyUserInput['body']>, res: Response){
+    const { id } = req.params;
+    const { code } = req.body;
 
     const user = await findUserById(id);
-
     if(!user){
         return res.send({ message: "could not verify user 😭" });
     }
@@ -65,7 +50,7 @@ export async function verifyUserController(req: Request<VerifyUserInput, {}, {}>
         return res.send({ message: "user already verified 😀" });
     }
 
-    if(user.verificationCode === verificationCode){
+    if(user.verificationCode === code){
         user.verified = true;
         await user.save();
         return res.send({ message: "verification successful🤝" });
@@ -84,15 +69,22 @@ export async function verifyUserController(req: Request<VerifyUserInput, {}, {}>
 export async function forgotPasswordController(req: Request<{}, {}, ForgotPasswordInput>, res: Response){
     const { email } = req.body;
 
-    const user = await findUserByEmail(email);
-    if(!user){
-        log.debug('User not found');
-        return res.status(404).json({ message: 'No such user exists in our system' });
-    }
+    try{
+        const user = await findUserByEmail(email);
+        if(!user){
+            log.debug('User not found');
+            return res.status(404).json({ message: 'No such user exists in our system' });
+        }
 
-    //sendmail
-    
-    return res.status(200).json({ message: 'A password reset link has been sent to your Email Address' });
+        const token = signJwt({ email: user.email, id: user._id }, "accessTokenPrivateKey", { expiresIn: '5m' });
+        const link = `http://localhost:8000/api/sole-luxury/users/reset-password/${user._id}/${token}`;
+        console.log(link);
+
+        //sendmail
+        return res.status(200).json({ message: 'A password reset link has been sent to your Email Address' });
+    }catch(error){
+        res.status(400).json(error);
+    }
 }
 
 /**
@@ -101,21 +93,49 @@ export async function forgotPasswordController(req: Request<{}, {}, ForgotPasswo
  * @param res 
  * @returns 
  */
-export async function resetPasswordController(req: Request<ResetPasswordInput['params'], {}, ResetPasswordInput['body']>, res: Response){
-    const { id, passwordResetCode } = req.params;
+export async function resetPasswordController(req: Request<ResetPasswordInput, {}, {}>, res: Response){
+    const { id, token } = req.params;
 
+    try{
+        const user = await findUserById(id);
+        if(!user){
+            log.debug('User not found');
+            return res.status(404).json({ message: 'No such user exists in our system' });
+        }
+
+        const decodeToken = verifyJwt(token, "accessTokenPublicKey");
+        res.render('index', { email: user.email });
+    }catch(error){
+        return res.status(404).json({ message: 'Not verified' });
+    }
+}
+
+/**
+ * resets a user password
+ * @param req id and password reset code body contains a password
+ * @param res 
+ * @returns 
+ */
+export async function resetPassword(req: Request<ResetPasswordProper['params'], {}, ResetPasswordProper['body']>, res: Response){
+    const { id, token } = req.params;
     const { password } = req.body;
+    console.log(password);
 
-    const user = await findUserById(id);
-    if(!user || !user.passwordResetCode || user.passwordResetCode !== passwordResetCode){
-        return res.status(400).send("could not reset password");
-    };
+    try{
+        const user = await findUserById(id);
+        if(!user){
+            log.debug('User not found');
+            return res.status(404).json({ message: 'No such user exists in our system' });
+        }
 
-    user.passwordResetCode = null;
-    user.password = password;
-    await user.save();
-
-    return res.status(200).send('password reset successful');
+        const decodeToken = verifyJwt(token, "accessTokenPublicKey");
+        const hashed = await argon.hash(password);
+        await UserModel.updateOne({ _id: id }, { $set: { password: hashed }});
+        return res.status(200).json({ message: 'Password Updated' });
+    }catch(error){
+        console.log(error)
+        return res.status(404).json({ message: 'Something went wrong' });
+    }
 }
 
 /**
